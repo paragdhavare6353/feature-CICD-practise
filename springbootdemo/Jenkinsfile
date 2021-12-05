@@ -1,0 +1,55 @@
+@Library(cm-cicd-pipeline-library@multikube)
+
+def branchName = "${env.BRANCH_NAME}"
+def label = "pod-${UUID.randomUUID().toString()}"
+def cloudId = 'paragdhavare6353-dev'
+def namespace = "${cloudId}"
+
+def mavenImg = "maven:3.8.4-jdk-11"
+def nodeImg = "jenkins-swarm-slave"
+
+def readPom
+def versionNumber
+
+//def dockerRegistry = ''
+workingDir = "/home/jenkins"
+
+def images = [jnlp:"jenkins-swarm-slave",mavenImg:"maven:3.8.4-jdk-11"]
+
+properties([disableConcurrentBuilds()])
+
+try{
+	slaveTemplate = new PodTemplates(cloudId, namespace, label, images, workingDir,this)
+	echo "Container images : ${images}"
+	echo "running agents on node with label ${label}"
+	slaveTemplate.BuilderTemplate{
+		node(slaveTemplate.podlabel){
+			timestamps{
+			
+			stage ("checkout"){
+				try{
+					checkout scm
+				}
+				catch(e){
+					currentBuild.result = "ABORTED"
+					error('!!!!! Git commit hash code differs')
+				}
+			}
+			
+			stage("maven build"){
+			 container('maven'){
+				readPom =readMavenPom file : '';
+				versionNumber = readPom.version;
+				echo "Current Build number is $ {versionNumber}"
+				sh "mvn -Pdefault-build -U -V -B -f pom.xml clean install" 
+			 }
+			}
+			
+			}
+		}
+	}
+}
+catch (e){
+	currentBuild.result ="FALIED"
+	echo 'FALIED !!!!!'
+}
